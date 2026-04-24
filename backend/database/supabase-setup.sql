@@ -185,9 +185,6 @@ CREATE POLICY "Users can read own data" ON users
 CREATE POLICY "Users can update own data" ON users
   FOR UPDATE USING (auth.uid() = id);
 
-CREATE POLICY "Users can insert on signup" ON users
-  FOR INSERT WITH CHECK (auth.uid() = id);
-
 -- BARBERSHOPS POLICIES
 CREATE POLICY "Everyone can view active barbershops" ON barbershops
   FOR SELECT USING (is_active = true OR owner_id = auth.uid());
@@ -269,6 +266,46 @@ CREATE POLICY "Owners manage appointments" ON appointments
 -- ==========================================
 -- 6. CREATE HELPER FUNCTIONS
 -- ==========================================
+
+-- Create profile row automatically when a new auth user is created
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+DECLARE
+  requested_role TEXT;
+BEGIN
+  requested_role := LOWER(COALESCE(NEW.raw_user_meta_data->>'role', 'client'));
+
+  IF requested_role NOT IN ('owner', 'barber', 'client') THEN
+    requested_role := 'client';
+  END IF;
+
+  INSERT INTO users (
+    id,
+    email,
+    role,
+    display_name
+  )
+  VALUES (
+    NEW.id,
+    LOWER(COALESCE(NEW.email, '')),
+    requested_role,
+    NULLIF(TRIM(COALESCE(NEW.raw_user_meta_data->>'display_name', '')), '')
+  )
+  ON CONFLICT (id) DO UPDATE
+  SET
+    email = EXCLUDED.email,
+    role = EXCLUDED.role,
+    display_name = COALESCE(EXCLUDED.display_name, users.display_name),
+    updated_at = NOW();
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()

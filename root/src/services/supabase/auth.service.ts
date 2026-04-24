@@ -1,5 +1,28 @@
 import { supabase } from './client';
 import { UserRole, User } from '../../types/database.types';
+import { AuthChangeEvent, Session } from '@supabase/supabase-js';
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+};
+
+const mapAuthError = (action: 'signup' | 'signin' | 'signout' | 'session' | 'profile'): string => {
+  switch (action) {
+    case 'signup':
+      return 'Unable to create account. Please verify your data and try again.';
+    case 'signin':
+      return 'Invalid credentials. Please check email and password.';
+    case 'signout':
+      return 'Unable to sign out right now. Please try again.';
+    case 'session':
+      return 'Unable to validate current session.';
+    case 'profile':
+      return 'Unable to load your profile.';
+    default:
+      return 'Unexpected authentication error.';
+  }
+};
 
 export const authService = {
   /**
@@ -7,31 +30,28 @@ export const authService = {
    */
   async signUp(email: string, password: string, role: UserRole, displayName: string) {
     try {
-      // 1. Create auth user
+      const normalizedEmail = email.toLowerCase().trim();
+      const normalizedDisplayName = displayName.trim();
+
+      // Create auth user; public profile is created automatically by DB trigger.
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
+        email: normalizedEmail,
         password,
+        options: {
+          data: {
+            role,
+            display_name: normalizedDisplayName,
+          },
+        },
       });
 
       if (authError) throw authError;
       if (!authData.user) throw new Error('No user returned from signup');
 
-      // 2. Create user profile in users table
-      const { error: profileError } = await supabase
-        .from('users')
-        .insert({
-          id: authData.user.id,
-          email: email.toLowerCase().trim(),
-          role,
-          display_name: displayName,
-        });
-
-      if (profileError) throw profileError;
-
       return authData;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Sign up error:', error);
-      throw new Error(error.message || 'Failed to sign up');
+      throw new Error(getErrorMessage(error, mapAuthError('signup')));
     }
   },
 
@@ -49,9 +69,9 @@ export const authService = {
       if (!data.user) throw new Error('No user returned from sign in');
 
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Sign in error:', error);
-      throw new Error(error.message || 'Failed to sign in');
+      throw new Error(getErrorMessage(error, mapAuthError('signin')));
     }
   },
 
@@ -62,9 +82,9 @@ export const authService = {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Sign out error:', error);
-      throw new Error(error.message || 'Failed to sign out');
+      throw new Error(getErrorMessage(error, mapAuthError('signout')));
     }
   },
 
@@ -76,7 +96,7 @@ export const authService = {
       const { data, error } = await supabase.auth.getSession();
       if (error) throw error;
       return data.session;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Get session error:', error);
       return null;
     }
@@ -97,9 +117,9 @@ export const authService = {
       if (!data) throw new Error('User profile not found');
 
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Get user profile error:', error);
-      throw new Error(error.message || 'Failed to get user profile');
+      throw new Error(getErrorMessage(error, mapAuthError('profile')));
     }
   },
 
@@ -117,9 +137,9 @@ export const authService = {
 
       if (error) throw error;
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Update profile error:', error);
-      throw new Error(error.message || 'Failed to update profile');
+      throw new Error(getErrorMessage(error, 'Unable to update profile.'));
     }
   },
 
@@ -130,16 +150,16 @@ export const authService = {
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email);
       if (error) throw error;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Reset password error:', error);
-      throw new Error(error.message || 'Failed to reset password');
+      throw new Error(getErrorMessage(error, 'Unable to reset password.'));
     }
   },
 
   /**
    * Listen to auth state changes
    */
-  onAuthStateChange(callback: (event: string, session: any) => void) {
+  onAuthStateChange(callback: (event: AuthChangeEvent, session: Session | null) => void) {
     return supabase.auth.onAuthStateChange((event, session) => {
       console.log('Auth event:', event);
       callback(event, session);

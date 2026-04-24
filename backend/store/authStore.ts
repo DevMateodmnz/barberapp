@@ -1,18 +1,26 @@
 import { create } from 'zustand';
+import { Session, Subscription } from '@supabase/supabase-js';
 import { User, UserRole } from '../types/database.types';
 import { authService } from '../services/supabase/auth.service';
+
+const getErrorMessage = (error: unknown, fallback: string): string => {
+  if (error instanceof Error && error.message) return error.message;
+  return fallback;
+};
+
+let authSubscription: Subscription | null = null;
 
 interface AuthState {
   // State
   user: User | null;
-  session: any | null;
+  session: Session | null;
   loading: boolean;
   initialized: boolean;
   error: string | null;
 
   // Actions
   setUser: (user: User | null) => void;
-  setSession: (session: any | null) => void;
+  setSession: (session: Session | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   
@@ -48,8 +56,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const profile = await authService.getUserProfile(authUser.id);
         set({ user: profile, session, error: null });
       }
-    } catch (error: any) {
-      const errorMessage = error.message || 'Failed to sign in';
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error, 'Failed to sign in');
       set({ error: errorMessage });
       throw new Error(errorMessage);
     } finally {
@@ -66,8 +74,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       
       // After signup, automatically sign in
       await get().signIn(email, password);
-    } catch (error: any) {
-      const errorMessage = error.message || 'Failed to sign up';
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error, 'Failed to sign up');
       set({ error: errorMessage });
       throw new Error(errorMessage);
     } finally {
@@ -81,8 +89,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ loading: true, error: null });
       await authService.signOut();
       set({ user: null, session: null });
-    } catch (error: any) {
-      const errorMessage = error.message || 'Failed to sign out';
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error, 'Failed to sign out');
       set({ error: errorMessage });
       throw new Error(errorMessage);
     } finally {
@@ -100,8 +108,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       
       const updatedUser = await authService.updateProfile(user.id, updates);
       set({ user: updatedUser });
-    } catch (error: any) {
-      const errorMessage = error.message || 'Failed to update profile';
+    } catch (error: unknown) {
+      const errorMessage = getErrorMessage(error, 'Failed to update profile');
       set({ error: errorMessage });
       throw new Error(errorMessage);
     } finally {
@@ -112,6 +120,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   // Initialize auth state
   initialize: async () => {
     try {
+      if (get().initialized) return;
       set({ loading: true });
       
       // Get current session
@@ -130,7 +139,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
 
       // Listen to auth state changes
-      authService.onAuthStateChange(async (event, session) => {
+      // Prevent multiple listeners if initialize is called again.
+      if (authSubscription) {
+        authSubscription.unsubscribe();
+        authSubscription = null;
+      }
+
+      const { data } = authService.onAuthStateChange(async (event, session) => {
         console.log('Auth event:', event);
         
         if (event === 'SIGNED_OUT') {
@@ -146,11 +161,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           set({ user: null, session: null });
         }
       });
+      authSubscription = data.subscription;
 
       set({ initialized: true });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Initialize error:', error);
-      set({ initialized: true, error: error.message });
+      set({ initialized: true, error: getErrorMessage(error, 'Failed to initialize auth') });
     } finally {
       set({ loading: false });
     }

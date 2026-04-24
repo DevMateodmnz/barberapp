@@ -1,12 +1,15 @@
 import { supabase } from './client';
 import {
   Appointment,
+  AppointmentStatus,
   AppointmentWithDetails,
   CreateAppointmentInput,
   UpdateAppointmentInput,
   TimeSlot,
 } from '../../types/database.types';
 import { format, addMinutes, startOfDay, endOfDay, isAfter } from 'date-fns';
+
+type AppointmentUpdatePayload = UpdateAppointmentInput & { ends_at?: string };
 
 export const appointmentService = {
   /**
@@ -40,9 +43,9 @@ export const appointmentService = {
 
       if (error) throw error;
       return data || [];
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Get appointments error:', error);
-      throw new Error(error.message || 'Failed to fetch appointments');
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch appointments');
     }
   },
 
@@ -77,9 +80,9 @@ export const appointmentService = {
 
       if (error) throw error;
       return data || [];
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Get employee appointments error:', error);
-      throw new Error(error.message || 'Failed to fetch appointments');
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch appointments');
     }
   },
 
@@ -103,9 +106,9 @@ export const appointmentService = {
       if (error) throw error;
       if (!data) throw new Error('Appointment not found');
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Get appointment error:', error);
-      throw new Error(error.message || 'Failed to fetch appointment');
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch appointment');
     }
   },
 
@@ -177,9 +180,9 @@ export const appointmentService = {
       if (error) throw error;
       if (!data) throw new Error('Failed to create appointment');
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Create appointment error:', error);
-      throw error;
+      throw new Error(error instanceof Error ? error.message : 'Failed to create appointment');
     }
   },
 
@@ -188,8 +191,10 @@ export const appointmentService = {
    */
   async updateAppointment(id: string, updates: UpdateAppointmentInput): Promise<Appointment> {
     try {
+      let payload: AppointmentUpdatePayload = { ...updates };
+
       // If updating time, recalculate end time
-      if (updates.starts_at) {
+      if (payload.starts_at) {
         const { data: appointment, error: appointmentError } = await supabase
           .from('appointments')
           .select('service_id, employee_id')
@@ -208,7 +213,7 @@ export const appointmentService = {
         if (serviceError) throw serviceError;
         if (!service) throw new Error('Service not found');
 
-        const startsAt = new Date(updates.starts_at);
+        const startsAt = new Date(payload.starts_at);
         if (Number.isNaN(startsAt.getTime())) {
           throw new Error('Invalid appointment start time');
         }
@@ -226,15 +231,15 @@ export const appointmentService = {
           throw new Error('This time slot is not available');
         }
 
-        updates = {
-          ...updates,
+        payload = {
+          ...payload,
           ends_at: endsAt.toISOString(),
-        } as any;
+        };
       }
 
       const { data, error } = await supabase
         .from('appointments')
-        .update(updates)
+        .update(payload)
         .eq('id', id)
         .select()
         .single();
@@ -242,17 +247,17 @@ export const appointmentService = {
       if (error) throw error;
       if (!data) throw new Error('Failed to update appointment');
       return data;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Update appointment error:', error);
-      throw error;
+      throw new Error(error instanceof Error ? error.message : 'Failed to update appointment');
     }
   },
 
   /**
    * Update appointment status
    */
-  async updateStatus(id: string, status: string): Promise<Appointment> {
-    return this.updateAppointment(id, { status } as any);
+  async updateStatus(id: string, status: AppointmentStatus): Promise<Appointment> {
+    return this.updateAppointment(id, { status });
   },
 
   /**
@@ -309,7 +314,7 @@ export const appointmentService = {
 
       if (error) throw error;
       return !data || data.length === 0;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Check availability error:', error);
       return false;
     }
@@ -385,9 +390,9 @@ export const appointmentService = {
       }
 
       return slots;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Get available slots error:', error);
-      throw new Error(error.message || 'Failed to fetch available slots');
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch available slots');
     }
   },
 
@@ -422,9 +427,9 @@ export const appointmentService = {
 
       if (error) throw error;
       return data || [];
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Get client appointments error:', error);
-      throw new Error(error.message || 'Failed to fetch client appointments');
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch client appointments');
     }
   },
 
@@ -439,9 +444,9 @@ export const appointmentService = {
         .eq('id', id);
 
       if (error) throw error;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Delete appointment error:', error);
-      throw new Error(error.message || 'Failed to delete appointment');
+      throw new Error(error instanceof Error ? error.message : 'Failed to delete appointment');
     }
   },
 };
