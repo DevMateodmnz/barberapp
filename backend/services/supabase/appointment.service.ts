@@ -6,7 +6,7 @@ import {
   UpdateAppointmentInput,
   TimeSlot,
 } from '../../types/database.types';
-import { format, addMinutes, parse, startOfDay, endOfDay, isAfter, isBefore } from 'date-fns';
+import { format, addMinutes, startOfDay, endOfDay, isAfter } from 'date-fns';
 
 export const appointmentService = {
   /**
@@ -167,14 +167,24 @@ export const appointmentService = {
       if (updates.starts_at) {
         const { data: appointment, error: appointmentError } = await supabase
           .from('appointments')
-          .select('service:services(duration_minutes), employee_id')
+          .select('service_id, employee_id')
           .eq('id', id)
           .single();
 
         if (appointmentError) throw appointmentError;
+        if (!appointment) throw new Error('Appointment not found');
+
+        const { data: service, error: serviceError } = await supabase
+          .from('services')
+          .select('duration_minutes')
+          .eq('id', appointment.service_id)
+          .single();
+
+        if (serviceError) throw serviceError;
+        if (!service) throw new Error('Service not found');
 
         const startsAt = new Date(updates.starts_at);
-        const endsAt = addMinutes(startsAt, appointment.service.duration_minutes);
+        const endsAt = addMinutes(startsAt, service.duration_minutes);
 
         // Check availability (exclude current appointment)
         const isAvailable = await this.checkAvailability(
@@ -356,13 +366,13 @@ export const appointmentService = {
   /**
    * Get upcoming appointments for a client
    */
-  async getClientAppointments(clientPhone: string): Promise<AppointmentWithDetails[]> {
+  async getClientAppointments(clientUserId: string): Promise<AppointmentWithDetails[]> {
     try {
-      // First find client records with this phone
+      // Find client records linked to this authenticated user
       const { data: clients, error: clientError } = await supabase
         .from('clients')
         .select('id')
-        .eq('phone', clientPhone);
+        .eq('user_id', clientUserId);
 
       if (clientError) throw clientError;
       if (!clients || clients.length === 0) return [];

@@ -77,6 +77,7 @@ export interface Service {
 export interface Client {
   id: string;
   barbershop_id: string;
+  user_id: string | null;
   name: string;
   phone: string | null;
   email: string | null;
@@ -163,6 +164,7 @@ export interface CreateEmployeeInput {
 
 export interface CreateClientInput {
   barbershop_id: string;
+  user_id?: string;
   name: string;
   phone?: string;
   email?: string;

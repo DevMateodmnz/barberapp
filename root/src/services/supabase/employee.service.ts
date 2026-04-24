@@ -121,6 +121,8 @@ export const employeeService = {
    * Create employee by email (invite barber)
    */
   async inviteBarberByEmail(barbershopId: string, email: string, displayName: string): Promise<Employee> {
+    const genericInviteError = 'Unable to invite barber with the provided email.';
+
     try {
       // First, find the user by email
       const { data: userData, error: userError } = await supabase
@@ -129,12 +131,8 @@ export const employeeService = {
         .eq('email', email.toLowerCase().trim())
         .single();
 
-      if (userError || !userData) {
-        throw new Error('User not found. They need to create an account first.');
-      }
-
-      if (userData.role !== 'barber') {
-        throw new Error('This user is not registered as a barber');
+      if (userError || !userData || userData.role !== 'barber') {
+        throw new Error(genericInviteError);
       }
 
       // Create employee record
@@ -145,7 +143,11 @@ export const employeeService = {
       });
     } catch (error: any) {
       console.error('Invite barber error:', error);
-      throw error;
+      if (error?.message === 'This user is already an employee at this barbershop') {
+        throw error;
+      }
+
+      throw new Error(genericInviteError);
     }
   },
 

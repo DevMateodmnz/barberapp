@@ -1,5 +1,5 @@
 import { supabase } from './client';
-import { Employee, CreateEmployeeInput } from '../../types/database.types';
+import { Employee, CreateEmployeeInput, Barbershop } from '../../types/database.types';
 
 export const employeeService = {
   /**
@@ -66,6 +66,32 @@ export const employeeService = {
   },
 
   /**
+   * Get active barbershops where the user works as barber
+   */
+  async getBarbershopsByUser(userId: string): Promise<Barbershop[]> {
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('barbershop:barbershops(*)')
+        .eq('user_id', userId)
+        .eq('is_active', true);
+
+      if (error) throw error;
+      if (!data) return [];
+
+      return data
+        .map((row: any) => {
+          const relation = Array.isArray(row.barbershop) ? row.barbershop[0] : row.barbershop;
+          return (relation ?? null) as Barbershop | null;
+        })
+        .filter((barbershop): barbershop is Barbershop => Boolean(barbershop));
+    } catch (error: any) {
+      console.error('Get barbershops by user error:', error);
+      throw new Error(error.message || 'Failed to fetch barber barbershops');
+    }
+  },
+
+  /**
    * Create new employee (link user to barbershop)
    */
   async createEmployee(input: CreateEmployeeInput): Promise<Employee> {
@@ -95,6 +121,8 @@ export const employeeService = {
    * Create employee by email (invite barber)
    */
   async inviteBarberByEmail(barbershopId: string, email: string, displayName: string): Promise<Employee> {
+    const genericInviteError = 'Unable to invite barber with the provided email.';
+
     try {
       // First, find the user by email
       const { data: userData, error: userError } = await supabase
@@ -103,12 +131,8 @@ export const employeeService = {
         .eq('email', email.toLowerCase().trim())
         .single();
 
-      if (userError || !userData) {
-        throw new Error('User not found. They need to create an account first.');
-      }
-
-      if (userData.role !== 'barber') {
-        throw new Error('This user is not registered as a barber');
+      if (userError || !userData || userData.role !== 'barber') {
+        throw new Error(genericInviteError);
       }
 
       // Create employee record
@@ -119,7 +143,11 @@ export const employeeService = {
       });
     } catch (error: any) {
       console.error('Invite barber error:', error);
-      throw error;
+      if (error?.message === 'This user is already an employee at this barbershop') {
+        throw error;
+      }
+
+      throw new Error(genericInviteError);
     }
   },
 

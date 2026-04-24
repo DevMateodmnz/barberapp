@@ -6,7 +6,7 @@ import {
   UpdateAppointmentInput,
   TimeSlot,
 } from '../../types/database.types';
-import { format, addMinutes, parse, startOfDay, endOfDay, isAfter, isBefore } from 'date-fns';
+import { format, addMinutes, startOfDay, endOfDay, isAfter } from 'date-fns';
 
 export const appointmentService = {
   /**
@@ -366,13 +366,13 @@ export const appointmentService = {
   /**
    * Get upcoming appointments for a client
    */
-  async getClientAppointments(clientPhone: string): Promise<AppointmentWithDetails[]> {
+  async getClientAppointments(clientUserId: string): Promise<AppointmentWithDetails[]> {
     try {
-      // First find client records with this phone
+      // Find client records linked to this authenticated user
       const { data: clients, error: clientError } = await supabase
         .from('clients')
         .select('id')
-        .eq('phone', clientPhone);
+        .eq('user_id', clientUserId);
 
       if (clientError) throw clientError;
       if (!clients || clients.length === 0) return [];

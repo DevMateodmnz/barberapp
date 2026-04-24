@@ -26,16 +26,40 @@ export const clientService = {
    */
   async searchClients(barbershopId: string, query: string): Promise<Client[]> {
     try {
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('barbershop_id', barbershopId)
-        .or(`name.ilike.%${query}%,phone.ilike.%${query}%`)
-        .order('name')
-        .limit(20);
+      const term = query.trim();
+      if (!term) return [];
 
-      if (error) throw error;
-      return data || [];
+      // Avoid raw string interpolation in PostgREST filters.
+      const pattern = `%${term.replace(/[%_]/g, '')}%`;
+
+      const [byNameResult, byPhoneResult] = await Promise.all([
+        supabase
+          .from('clients')
+          .select('*')
+          .eq('barbershop_id', barbershopId)
+          .ilike('name', pattern)
+          .order('name')
+          .limit(20),
+        supabase
+          .from('clients')
+          .select('*')
+          .eq('barbershop_id', barbershopId)
+          .ilike('phone', pattern)
+          .order('name')
+          .limit(20),
+      ]);
+
+      if (byNameResult.error) throw byNameResult.error;
+      if (byPhoneResult.error) throw byPhoneResult.error;
+
+      const merged = [...(byNameResult.data || []), ...(byPhoneResult.data || [])];
+      const uniqueById = new Map<string, Client>();
+
+      for (const client of merged) {
+        uniqueById.set(client.id, client);
+      }
+
+      return Array.from(uniqueById.values()).sort((a, b) => a.name.localeCompare(b.name));
     } catch (error: any) {
       console.error('Search clients error:', error);
       throw new Error(error.message || 'Failed to search clients');

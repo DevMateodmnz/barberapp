@@ -64,13 +64,15 @@ CREATE TABLE IF NOT EXISTS services (
 CREATE TABLE IF NOT EXISTS clients (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   barbershop_id UUID REFERENCES barbershops(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
   phone TEXT,
   email TEXT,
   notes TEXT,
   photo_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE(barbershop_id, user_id)
 );
 
 -- Appointments table
@@ -115,6 +117,7 @@ CREATE INDEX IF NOT EXISTS idx_services_barbershop ON services(barbershop_id);
 CREATE INDEX IF NOT EXISTS idx_services_active ON services(is_active);
 
 CREATE INDEX IF NOT EXISTS idx_clients_barbershop ON clients(barbershop_id);
+CREATE INDEX IF NOT EXISTS idx_clients_user ON clients(user_id);
 
 CREATE INDEX IF NOT EXISTS idx_appointments_barbershop ON appointments(barbershop_id);
 CREATE INDEX IF NOT EXISTS idx_appointments_employee ON appointments(employee_id);
@@ -154,6 +157,7 @@ DROP POLICY IF EXISTS "Owners can manage services" ON services;
 
 DROP POLICY IF EXISTS "Staff can read clients" ON clients;
 DROP POLICY IF EXISTS "Owners can manage clients" ON clients;
+DROP POLICY IF EXISTS "Clients can read own profiles" ON clients;
 
 DROP POLICY IF EXISTS "Owners see all appointments" ON appointments;
 DROP POLICY IF EXISTS "Employees see their appointments" ON appointments;
@@ -226,6 +230,9 @@ CREATE POLICY "Owners can manage clients" ON clients
     barbershop_id IN (SELECT id FROM barbershops WHERE owner_id = auth.uid())
   );
 
+CREATE POLICY "Clients can read own profiles" ON clients
+  FOR SELECT USING (user_id = auth.uid());
+
 -- APPOINTMENTS POLICIES
 CREATE POLICY "Owners see all appointments" ON appointments
   FOR SELECT USING (
@@ -240,7 +247,7 @@ CREATE POLICY "Employees see their appointments" ON appointments
 CREATE POLICY "Clients see their appointments" ON appointments
   FOR SELECT USING (
     client_id IN (
-      SELECT id FROM clients WHERE phone = (SELECT phone FROM users WHERE id = auth.uid())
+      SELECT id FROM clients WHERE user_id = auth.uid()
     )
   );
 

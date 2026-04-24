@@ -26,7 +26,7 @@ interface AppointmentState {
   fetchAppointmentsByBarbershop: (barbershopId: string, startDate?: Date, endDate?: Date) => Promise<void>;
   fetchAppointmentsByEmployee: (employeeId: string, startDate?: Date, endDate?: Date) => Promise<void>;
   fetchAppointmentById: (id: string) => Promise<void>;
-  fetchClientAppointments: (clientPhone: string) => Promise<void>;
+  fetchClientAppointments: (clientUserId: string) => Promise<void>;
   fetchAvailableSlots: (employeeId: string, serviceId: string, date: Date) => Promise<void>;
   
   createAppointment: (input: CreateAppointmentInput) => Promise<Appointment>;
@@ -105,10 +105,10 @@ export const useAppointmentStore = create<AppointmentState>((set, get) => ({
   },
 
   // Fetch client appointments
-  fetchClientAppointments: async (clientPhone: string) => {
+  fetchClientAppointments: async (clientUserId: string) => {
     try {
       set({ loading: true, error: null });
-      const appointments = await appointmentService.getClientAppointments(clientPhone);
+      const appointments = await appointmentService.getClientAppointments(clientUserId);
       set({ appointments });
     } catch (error: any) {
       set({ error: error.message });
