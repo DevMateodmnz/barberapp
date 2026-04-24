@@ -8,6 +8,7 @@ import {
   TimeSlot,
 } from '../../types/database.types';
 import { format, addMinutes, startOfDay, endOfDay, isAfter } from 'date-fns';
+import { parseDateOrThrow } from './service.helpers';
 
 type AppointmentUpdatePayload = UpdateAppointmentInput & { ends_at?: string };
 
@@ -150,10 +151,7 @@ export const appointmentService = {
       }
 
       // Calculate end time
-      const startsAt = new Date(input.starts_at);
-      if (Number.isNaN(startsAt.getTime())) {
-        throw new Error('Invalid appointment start time');
-      }
+      const startsAt = parseDateOrThrow(input.starts_at, 'Invalid appointment start time');
       const endsAt = addMinutes(startsAt, serviceResult.data.duration_minutes);
 
       // Check availability
@@ -213,10 +211,7 @@ export const appointmentService = {
         if (serviceError) throw serviceError;
         if (!service) throw new Error('Service not found');
 
-        const startsAt = new Date(payload.starts_at);
-        if (Number.isNaN(startsAt.getTime())) {
-          throw new Error('Invalid appointment start time');
-        }
+        const startsAt = parseDateOrThrow(payload.starts_at, 'Invalid appointment start time');
         const endsAt = addMinutes(startsAt, service.duration_minutes);
 
         // Check availability (exclude current appointment)

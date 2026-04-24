@@ -1,5 +1,6 @@
 import { supabase } from './client';
 import { Employee, CreateEmployeeInput, Barbershop } from '../../types/database.types';
+import { INVITE_GENERIC_ERROR, resolveInviteErrorMessage } from './service.helpers';
 
 export const employeeService = {
   /**
@@ -121,8 +122,6 @@ export const employeeService = {
    * Create employee by email (invite barber)
    */
   async inviteBarberByEmail(barbershopId: string, email: string, displayName: string): Promise<Employee> {
-    const genericInviteError = 'Unable to invite barber with the provided email.';
-
     try {
       // First, find the user by email
       const { data: userData, error: userError } = await supabase
@@ -132,7 +131,7 @@ export const employeeService = {
         .single();
 
       if (userError || !userData || userData.role !== 'barber') {
-        throw new Error(genericInviteError);
+        throw new Error(INVITE_GENERIC_ERROR);
       }
 
       // Create employee record
@@ -143,11 +142,7 @@ export const employeeService = {
       });
     } catch (error: any) {
       console.error('Invite barber error:', error);
-      if (error?.message === 'This user is already an employee at this barbershop') {
-        throw error;
-      }
-
-      throw new Error(genericInviteError);
+      throw new Error(resolveInviteErrorMessage(error));
     }
   },
 

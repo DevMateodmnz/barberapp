@@ -1,6 +1,7 @@
 import { supabase } from './client';
 import { UserRole, User } from '../../types/database.types';
 import { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { buildSignUpInput, normalizeEmail } from './service.helpers';
 
 const getErrorMessage = (error: unknown, fallback: string): string => {
   if (error instanceof Error && error.message) return error.message;
@@ -30,20 +31,10 @@ export const authService = {
    */
   async signUp(email: string, password: string, role: UserRole, displayName: string) {
     try {
-      const normalizedEmail = email.toLowerCase().trim();
-      const normalizedDisplayName = displayName.trim();
-
       // Create auth user; public profile is created automatically by DB trigger.
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: normalizedEmail,
-        password,
-        options: {
-          data: {
-            role,
-            display_name: normalizedDisplayName,
-          },
-        },
-      });
+      const { data: authData, error: authError } = await supabase.auth.signUp(
+        buildSignUpInput(email, password, role, displayName)
+      );
 
       if (authError) throw authError;
       if (!authData.user) throw new Error('No user returned from signup');
@@ -61,7 +52,7 @@ export const authService = {
   async signIn(email: string, password: string) {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.toLowerCase().trim(),
+        email: normalizeEmail(email),
         password,
       });
 

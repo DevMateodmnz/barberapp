@@ -1,5 +1,6 @@
 import { supabase } from './client';
 import { Client, CreateClientInput, UpdateClientInput } from '../../types/database.types';
+import { buildClientSearchPattern, mergeUniqueById } from './service.helpers';
 
 export const clientService = {
   /**
@@ -26,11 +27,8 @@ export const clientService = {
    */
   async searchClients(barbershopId: string, query: string): Promise<Client[]> {
     try {
-      const term = query.trim();
-      if (!term) return [];
-
-      // Avoid raw string interpolation in PostgREST filters.
-      const pattern = `%${term.replace(/[%_]/g, '')}%`;
+      const pattern = buildClientSearchPattern(query);
+      if (!pattern) return [];
 
       const [byNameResult, byPhoneResult] = await Promise.all([
         supabase
@@ -53,13 +51,7 @@ export const clientService = {
       if (byPhoneResult.error) throw byPhoneResult.error;
 
       const merged = [...(byNameResult.data || []), ...(byPhoneResult.data || [])];
-      const uniqueById = new Map<string, Client>();
-
-      for (const client of merged) {
-        uniqueById.set(client.id, client);
-      }
-
-      return Array.from(uniqueById.values()).sort((a, b) => a.name.localeCompare(b.name));
+      return mergeUniqueById(merged).sort((a, b) => a.name.localeCompare(b.name));
     } catch (error: any) {
       console.error('Search clients error:', error);
       throw new Error(error.message || 'Failed to search clients');
