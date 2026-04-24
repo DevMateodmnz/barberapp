@@ -1,5 +1,5 @@
 import { supabase } from './client';
-import { Employee, CreateEmployeeInput } from '../../types/database.types';
+import { Employee, CreateEmployeeInput, Barbershop } from '../../types/database.types';
 
 export const employeeService = {
   /**
@@ -62,6 +62,32 @@ export const employeeService = {
     } catch (error: any) {
       console.error('Get my employee record error:', error);
       return null;
+    }
+  },
+
+  /**
+   * Get active barbershops where the user works as barber
+   */
+  async getBarbershopsByUser(userId: string): Promise<Barbershop[]> {
+    try {
+      const { data, error } = await supabase
+        .from('employees')
+        .select('barbershop:barbershops(*)')
+        .eq('user_id', userId)
+        .eq('is_active', true);
+
+      if (error) throw error;
+      if (!data) return [];
+
+      return data
+        .map((row: any) => {
+          const relation = Array.isArray(row.barbershop) ? row.barbershop[0] : row.barbershop;
+          return (relation ?? null) as Barbershop | null;
+        })
+        .filter((barbershop): barbershop is Barbershop => Boolean(barbershop));
+    } catch (error: any) {
+      console.error('Get barbershops by user error:', error);
+      throw new Error(error.message || 'Failed to fetch barber barbershops');
     }
   },
 
