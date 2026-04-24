@@ -114,19 +114,44 @@ export const appointmentService = {
    */
   async createAppointment(input: CreateAppointmentInput): Promise<Appointment> {
     try {
-      // Get service to calculate end time
-      const { data: service, error: serviceError } = await supabase
-        .from('services')
-        .select('duration_minutes')
-        .eq('id', input.service_id)
-        .single();
+      // Validate cross-entity consistency inside the same barbershop.
+      const [serviceResult, employeeResult, clientResult] = await Promise.all([
+        supabase
+          .from('services')
+          .select('duration_minutes')
+          .eq('id', input.service_id)
+          .eq('barbershop_id', input.barbershop_id)
+          .single(),
+        supabase
+          .from('employees')
+          .select('id')
+          .eq('id', input.employee_id)
+          .eq('barbershop_id', input.barbershop_id)
+          .single(),
+        supabase
+          .from('clients')
+          .select('id')
+          .eq('id', input.client_id)
+          .eq('barbershop_id', input.barbershop_id)
+          .single(),
+      ]);
 
-      if (serviceError) throw serviceError;
-      if (!service) throw new Error('Service not found');
+      if (serviceResult.error || !serviceResult.data) {
+        throw serviceResult.error || new Error('Invalid service for selected barbershop');
+      }
+      if (employeeResult.error || !employeeResult.data) {
+        throw employeeResult.error || new Error('Invalid employee for selected barbershop');
+      }
+      if (clientResult.error || !clientResult.data) {
+        throw clientResult.error || new Error('Invalid client for selected barbershop');
+      }
 
       // Calculate end time
       const startsAt = new Date(input.starts_at);
-      const endsAt = addMinutes(startsAt, service.duration_minutes);
+      if (Number.isNaN(startsAt.getTime())) {
+        throw new Error('Invalid appointment start time');
+      }
+      const endsAt = addMinutes(startsAt, serviceResult.data.duration_minutes);
 
       // Check availability
       const isAvailable = await this.checkAvailability(
@@ -184,6 +209,9 @@ export const appointmentService = {
         if (!service) throw new Error('Service not found');
 
         const startsAt = new Date(updates.starts_at);
+        if (Number.isNaN(startsAt.getTime())) {
+          throw new Error('Invalid appointment start time');
+        }
         const endsAt = addMinutes(startsAt, service.duration_minutes);
 
         // Check availability (exclude current appointment)
