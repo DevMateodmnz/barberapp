@@ -1,0 +1,141 @@
+================================================================================
+GUIA PARA EJECUTAR SQL EN SUPABASE - BARBERAPP
+================================================================================
+Fecha: 30 Abril 2026
+Estado: SQL PENDIENTE DE EJECUTAR
+
+================================================================================
+PASO 1: IR AL SQL EDITOR DE SUPABASE
+================================================================================
+
+1. Abre: https://supabase.com/dashboard
+2. Selecciona el proyecto: atihuxzpzoknwvejwumr
+3. En el menú lateral izquierdo, click en: SQL Editor
+
+================================================================================
+PASO 2: SI LAS TABLAS YA EXISTEN (ERROR ANTERIOR)
+================================================================================
+
+Si el SQL anterior falló parcialmente y ya hay tablas creadas,
+primero borrá todas las tablas existentes:
+
+-- EJECUTAR ESTE SQL PRIMERO SI HAY ERROR DE TABLAS EXISTENTES:
+--------------------------------------------------------------------------------
+DROP TABLE IF EXISTS appointments CASCADE;
+DROP TABLE IF EXISTS clients CASCADE;
+DROP TABLE IF EXISTS services CASCADE;
+DROP TABLE IF EXISTS employees CASCADE;
+DROP TABLE IF EXISTS barbershops CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+--------------------------------------------------------------------------------
+
+Click "Run" para ejecutar.
+
+================================================================================
+PASO 3: EJECUTAR EL SQL PRINCIPAL
+================================================================================
+
+1. Click en "New Query" (botón verde arriba a la derecha)
+
+2. Copia TODO el contenido del archivo:
+   /home/mateo/Documents/barberapp/backend/database/supabase-setup.sql
+
+3. Pega en el SQL Editor
+
+4. Click "Run" o presiona Ctrl+Enter
+
+5. Esperá a que diga "Success" o "Database setup completed successfully!"
+
+================================================================================
+PASO 4: VERIFICAR QUE LAS TABLAS SE CREARON
+================================================================================
+
+Ejecuta este query para verificar:
+
+SELECT table_name FROM information_schema.tables
+WHERE table_schema = 'public'
+ORDER BY table_name;
+
+Deberías ver estas 6 tablas:
+- users
+- barbershops
+- employees
+- services
+- clients
+- appointments
+
+================================================================================
+PASO 5: ARRANCAR LA APP
+================================================================================
+
+Una vez que las tablas estén creadas:
+
+1. Abrir terminal
+2. cd /home/mateo/Documents/barberapp/root
+3. npm start --web
+4. Abrir http://localhost:8081
+
+================================================================================
+POSIBLES ERRORES Y SOLUCIONES
+================================================================================
+
+ERROR: "relation already exists"
+→ SOLUCIÓN: Ejecutar el DROP de arriba primero, luego el SQL principal
+
+ERROR: "data type uuid has no default operator class for access method gist"
+→ Este error ya fue corregido en el SQL. Si seguís viendo este error,
+→ significa que no estás usando la versión corregida del SQL.
+
+ERROR: "permission denied"
+→ Necesitás ser el owner del proyecto o tener permisos de admin.
+
+ERROR: "Invalid API key"
+→ Esto es normal cuando probás la conexión desde fuera.
+→ La app usa el ANON key y funciona bien.
+
+================================================================================
+COMANDOS DE VERIFICACION POST-SQL
+================================================================================
+
+-- Ver tablas creadas:
+SELECT 'Tables created: ' || count(*)::text FROM information_schema.tables
+WHERE table_schema = 'public' AND table_name IN (
+  'users', 'barbershops', 'employees', 'services', 'clients', 'appointments'
+);
+
+-- Ver políticas RLS:
+SELECT tablename, policyname FROM pg_policies WHERE schemaname = 'public';
+
+-- Ver triggers:
+SELECT trigger_name FROM information_schema.triggers
+WHERE trigger_schema = 'public';
+
+================================================================================
+ARCHIVO DEL SQL (PARA COPIAR)
+================================================================================
+
+Ubicación: /home/mateo/Documents/barberapp/backend/database/supabase-setup.sql
+
+Este archivo contiene:
+- 6 tablas (users, barbershops, employees, services, clients, appointments)
+- Índices para performance
+- Row Level Security (RLS) policies
+- 3 triggers automáticos (handle_new_user, update_updated_at)
+- Storage bucket para avatares
+
+================================================================================
+NOTAS IMPORTANTES
+================================================================================
+
+- El constraint EXCLUDE USING gist (para evitar citas solapadas) fue REMOVIDO
+  porque Supabase no tiene la extensión btree_gist habilitada por defecto.
+  La validación de citas solapadas se maneja en la aplicación
+  (appointment.service.ts tiene la lógica).
+
+- El SQL usa "CREATE TABLE IF NOT EXISTS" por lo que es seguro ejecutarlo
+  múltiples veces (no borra datos existentes).
+
+- Las tablas tienen relaciones FOREIGN KEY, así que el orden importa:
+  users → barbershops → employees → services → clients → appointments
+
+================================================================================

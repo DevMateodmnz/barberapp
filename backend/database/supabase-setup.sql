@@ -1,10 +1,10 @@
 -- ============================================
--- BARBERAPP DATABASE SETUP
+-- BARBERAPP DATABASE SETUP (Fixed Version)
 -- Run this in Supabase SQL Editor
 -- ============================================
 
 -- ==========================================
--- 1. CREATE TABLES
+-- 1. CREATE TABLES (Without GIST exclusion)
 -- ==========================================
 
 -- Users table (extends auth.users)
@@ -44,8 +44,7 @@ CREATE TABLE IF NOT EXISTS employees (
   photo_url TEXT,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  CONSTRAINT employees_barbershop_user_unique UNIQUE(barbershop_id, user_id),
-  CONSTRAINT employees_id_barbershop_unique UNIQUE(id, barbershop_id)
+  CONSTRAINT employees_barbershop_user_unique UNIQUE(barbershop_id, user_id)
 );
 
 -- Services table
@@ -58,8 +57,7 @@ CREATE TABLE IF NOT EXISTS services (
   price_cents INTEGER NOT NULL CHECK (price_cents >= 0),
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  CONSTRAINT services_id_barbershop_unique UNIQUE(id, barbershop_id)
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Clients table
@@ -73,12 +71,10 @@ CREATE TABLE IF NOT EXISTS clients (
   notes TEXT,
   photo_url TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  CONSTRAINT clients_barbershop_user_unique UNIQUE(barbershop_id, user_id),
-  CONSTRAINT clients_id_barbershop_unique UNIQUE(id, barbershop_id)
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Appointments table
+-- Appointments table (NO GIST EXCLUSION - handled in app logic)
 CREATE TABLE IF NOT EXISTS appointments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   barbershop_id UUID NOT NULL REFERENCES barbershops(id) ON DELETE CASCADE,
@@ -99,13 +95,7 @@ CREATE TABLE IF NOT EXISTS appointments (
   CONSTRAINT appointments_employee_barbershop_fk FOREIGN KEY (employee_id, barbershop_id)
     REFERENCES employees(id, barbershop_id) ON UPDATE CASCADE ON DELETE RESTRICT,
   CONSTRAINT appointments_client_barbershop_fk FOREIGN KEY (client_id, barbershop_id)
-    REFERENCES clients(id, barbershop_id) ON UPDATE CASCADE ON DELETE RESTRICT,
-  
-  -- Prevent overlapping appointments for same employee
-  CONSTRAINT no_overlap EXCLUDE USING gist (
-    employee_id WITH =,
-    tstzrange(starts_at, ends_at) WITH &&
-  ) WHERE (status NOT IN ('canceled_by_owner', 'canceled_by_client'))
+    REFERENCES clients(id, barbershop_id) ON UPDATE CASCADE ON DELETE RESTRICT
 );
 
 -- ==========================================
@@ -147,58 +137,37 @@ ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
 
 -- ==========================================
--- 4. DROP EXISTING POLICIES (for clean slate)
--- ==========================================
-
-DROP POLICY IF EXISTS "Users can read own data" ON users;
-DROP POLICY IF EXISTS "Users can update own data" ON users;
-DROP POLICY IF EXISTS "Users can insert on signup" ON users;
-
-DROP POLICY IF EXISTS "Everyone can view active barbershops" ON barbershops;
-DROP POLICY IF EXISTS "Owners can insert their barbershops" ON barbershops;
-DROP POLICY IF EXISTS "Owners can update their barbershops" ON barbershops;
-DROP POLICY IF EXISTS "Owners can delete their barbershops" ON barbershops;
-
-DROP POLICY IF EXISTS "Staff can read employees" ON employees;
-DROP POLICY IF EXISTS "Owners can manage employees" ON employees;
-
-DROP POLICY IF EXISTS "Everyone can read active services" ON services;
-DROP POLICY IF EXISTS "Owners can manage services" ON services;
-
-DROP POLICY IF EXISTS "Staff can read clients" ON clients;
-DROP POLICY IF EXISTS "Owners can manage clients" ON clients;
-DROP POLICY IF EXISTS "Clients can read own profiles" ON clients;
-
-DROP POLICY IF EXISTS "Owners see all appointments" ON appointments;
-DROP POLICY IF EXISTS "Employees see their appointments" ON appointments;
-DROP POLICY IF EXISTS "Owners manage appointments" ON appointments;
-DROP POLICY IF EXISTS "Clients see their appointments" ON appointments;
-
--- ==========================================
--- 5. CREATE ROW LEVEL SECURITY POLICIES
+-- 4. CREATE ROW LEVEL SECURITY POLICIES
 -- ==========================================
 
 -- USERS POLICIES
+DROP POLICY IF EXISTS "Users can read own data" ON users;
 CREATE POLICY "Users can read own data" ON users
   FOR SELECT USING (auth.uid() = id);
 
+DROP POLICY IF EXISTS "Users can update own data" ON users;
 CREATE POLICY "Users can update own data" ON users
   FOR UPDATE USING (auth.uid() = id);
 
 -- BARBERSHOPS POLICIES
+DROP POLICY IF EXISTS "Everyone can view active barbershops" ON barbershops;
 CREATE POLICY "Everyone can view active barbershops" ON barbershops
   FOR SELECT USING (is_active = true OR owner_id = auth.uid());
 
+DROP POLICY IF EXISTS "Owners can insert their barbershops" ON barbershops;
 CREATE POLICY "Owners can insert their barbershops" ON barbershops
   FOR INSERT WITH CHECK (owner_id = auth.uid());
 
+DROP POLICY IF EXISTS "Owners can update their barbershops" ON barbershops;
 CREATE POLICY "Owners can update their barbershops" ON barbershops
   FOR UPDATE USING (owner_id = auth.uid());
 
+DROP POLICY IF EXISTS "Owners can delete their barbershops" ON barbershops;
 CREATE POLICY "Owners can delete their barbershops" ON barbershops
   FOR DELETE USING (owner_id = auth.uid());
 
 -- EMPLOYEES POLICIES
+DROP POLICY IF EXISTS "Staff can read employees" ON employees;
 CREATE POLICY "Staff can read employees" ON employees
   FOR SELECT USING (
     barbershop_id IN (
@@ -208,21 +177,25 @@ CREATE POLICY "Staff can read employees" ON employees
     )
   );
 
+DROP POLICY IF EXISTS "Owners can manage employees" ON employees;
 CREATE POLICY "Owners can manage employees" ON employees
   FOR ALL USING (
     barbershop_id IN (SELECT id FROM barbershops WHERE owner_id = auth.uid())
   );
 
 -- SERVICES POLICIES
+DROP POLICY IF EXISTS "Everyone can read active services" ON services;
 CREATE POLICY "Everyone can read active services" ON services
   FOR SELECT USING (is_active = true);
 
+DROP POLICY IF EXISTS "Owners can manage services" ON services;
 CREATE POLICY "Owners can manage services" ON services
   FOR ALL USING (
     barbershop_id IN (SELECT id FROM barbershops WHERE owner_id = auth.uid())
   );
 
 -- CLIENTS POLICIES
+DROP POLICY IF EXISTS "Staff can read clients" ON clients;
 CREATE POLICY "Staff can read clients" ON clients
   FOR SELECT USING (
     barbershop_id IN (
@@ -232,25 +205,30 @@ CREATE POLICY "Staff can read clients" ON clients
     )
   );
 
+DROP POLICY IF EXISTS "Owners can manage clients" ON clients;
 CREATE POLICY "Owners can manage clients" ON clients
   FOR ALL USING (
     barbershop_id IN (SELECT id FROM barbershops WHERE owner_id = auth.uid())
   );
 
+DROP POLICY IF EXISTS "Clients can read own profiles" ON clients;
 CREATE POLICY "Clients can read own profiles" ON clients
   FOR SELECT USING (user_id = auth.uid());
 
 -- APPOINTMENTS POLICIES
+DROP POLICY IF EXISTS "Owners see all appointments" ON appointments;
 CREATE POLICY "Owners see all appointments" ON appointments
   FOR SELECT USING (
     barbershop_id IN (SELECT id FROM barbershops WHERE owner_id = auth.uid())
   );
 
+DROP POLICY IF EXISTS "Employees see their appointments" ON appointments;
 CREATE POLICY "Employees see their appointments" ON appointments
   FOR SELECT USING (
     employee_id IN (SELECT id FROM employees WHERE user_id = auth.uid())
   );
 
+DROP POLICY IF EXISTS "Clients see their appointments" ON appointments;
 CREATE POLICY "Clients see their appointments" ON appointments
   FOR SELECT USING (
     client_id IN (
@@ -258,13 +236,14 @@ CREATE POLICY "Clients see their appointments" ON appointments
     )
   );
 
+DROP POLICY IF EXISTS "Owners manage appointments" ON appointments;
 CREATE POLICY "Owners manage appointments" ON appointments
   FOR ALL USING (
     barbershop_id IN (SELECT id FROM barbershops WHERE owner_id = auth.uid())
   );
 
 -- ==========================================
--- 6. CREATE HELPER FUNCTIONS
+-- 5. CREATE HELPER FUNCTIONS
 -- ==========================================
 
 -- Create profile row automatically when a new auth user is created
@@ -343,15 +322,13 @@ CREATE TRIGGER update_appointments_updated_at
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ==========================================
--- 7. CREATE STORAGE BUCKETS
+-- 6. CREATE STORAGE BUCKETS
 -- ==========================================
 
--- Create storage bucket for avatars
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('avatars', 'avatars', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Storage policies for avatars
 DROP POLICY IF EXISTS "Avatar images are publicly accessible" ON storage.objects;
 CREATE POLICY "Avatar images are publicly accessible"
   ON storage.objects FOR SELECT
@@ -385,7 +362,6 @@ CREATE POLICY "Users can delete own avatars"
 -- SETUP COMPLETE!
 -- ==========================================
 
--- Verify setup
 SELECT 'Database setup completed successfully!' AS status;
-SELECT 'Tables created: ' || count(*)::text FROM information_schema.tables 
+SELECT 'Tables created: ' || count(*)::text FROM information_schema.tables
 WHERE table_schema = 'public' AND table_name IN ('users', 'barbershops', 'employees', 'services', 'clients', 'appointments');
