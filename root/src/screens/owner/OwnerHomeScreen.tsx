@@ -1,14 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Barbershop } from '../../types/database.types';
 import { useAuthStore } from '../../store/authStore';
 import { barbershopService } from '../../services/supabase/barbershop.service';
 import { Loading } from '../../components/common/Loading';
 import { Empty } from '../../components/common/Empty';
 import { Button } from '../../components/ui/Button';
-import { BarbershopCard } from '../../components/common/BarbershopCard';
+import { Card } from '../../components/ui/Card';
 
-export const OwnerHomeScreen: React.FC = () => {
+export const OwnerHomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { user, signOut } = useAuthStore();
   const [barbershops, setBarbershops] = useState<Barbershop[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +63,21 @@ export const OwnerHomeScreen: React.FC = () => {
             }}
           />
         }
-        renderItem={({ item }) => <BarbershopCard barbershop={item} />}
+        ListHeaderComponent={
+          <Button
+            title="+ Create Barbershop"
+            onPress={() => navigation.navigate('CreateBarbershop')}
+            style={styles.createButton}
+          />
+        }
+        renderItem={({ item }) => (
+          <TouchableOpacity onPress={() => navigation.navigate('BarbershopDetails', { barbershopId: item.id })}>
+            <Card style={styles.barbershopCard}>
+              <Text style={styles.barbershopName}>{item.name}</Text>
+              <Text style={styles.barbershopCity}>{item.city}</Text>
+            </Card>
+          </TouchableOpacity>
+        )}
         ListEmptyComponent={
           <Empty title="No barbershops yet" message="Create your first barbershop to get started." />
         }
@@ -100,5 +114,21 @@ const styles = StyleSheet.create({
   error: {
     color: '#b91c1c',
     marginBottom: 10,
+  },
+  createButton: {
+    marginBottom: 16,
+  },
+  barbershopCard: {
+    marginBottom: 12,
+  },
+  barbershopName: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  barbershopCity: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 2,
   },
 });

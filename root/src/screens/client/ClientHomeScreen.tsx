@@ -1,66 +1,36 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Barbershop } from '../../types/database.types';
 import { useAuthStore } from '../../store/authStore';
 import { barbershopService } from '../../services/supabase/barbershop.service';
 import { Loading } from '../../components/common/Loading';
 import { Empty } from '../../components/common/Empty';
 import { Button } from '../../components/ui/Button';
-import { BarbershopCard } from '../../components/common/BarbershopCard';
+import { Card } from '../../components/ui/Card';
 
-export const ClientHomeScreen: React.FC = () => {
+export const ClientHomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { user, signOut } = useAuthStore();
   const [barbershops, setBarbershops] = useState<Barbershop[]>([]);
-  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     try {
-      setError(null);
       const data = await barbershopService.getAllBarbershops();
       setBarbershops(data);
-    } catch (fetchError: any) {
-      setError(fetchError.message || 'Failed to load barbershops');
+    } catch (err) {
+      console.error('Failed to load barbershops:', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   }, []);
 
-  const search = useCallback(async () => {
-    if (!query.trim()) {
-      fetchAll();
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await barbershopService.searchByCity(query.trim());
-      setBarbershops(data);
-    } catch (fetchError: any) {
-      setError(fetchError.message || 'Failed to search barbershops');
-    } finally {
-      setLoading(false);
-    }
-  }, [fetchAll, query]);
-
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
 
-  if (loading) {
-    return <Loading fullScreen message="Loading barbershops..." />;
-  }
+  if (loading) return <Loading fullScreen message="Loading barbershops..." />;
 
   return (
     <View style={styles.container}>
@@ -72,35 +42,40 @@ export const ClientHomeScreen: React.FC = () => {
         <Button title="Sign Out" variant="outline" onPress={signOut} />
       </View>
 
-      <View style={styles.searchRow}>
-        <TextInput
-          placeholder="Search by city..."
-          value={query}
-          onChangeText={setQuery}
-          style={styles.input}
+      <View style={styles.actionsRow}>
+        <Button
+          title="Search"
+          onPress={() => navigation.navigate('SearchBarbershops')}
+          style={styles.actionBtn}
         />
-        <Button title="Search" onPress={search} />
+        <Button
+          title="My Appointments"
+          variant="outline"
+          onPress={() => navigation.navigate('MyAppointments')}
+          style={styles.actionBtn}
+        />
       </View>
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <FlatList
         data={barbershops}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => {
-              setRefreshing(true);
-              fetchAll();
-            }}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} />
         }
-        renderItem={({ item }) => <BarbershopCard barbershop={item} />}
-        ListEmptyComponent={
-          <Empty title="No barbershops found" message="Try another city or refresh the list." />
-        }
+        renderItem={({ item }) => (
+          <Card style={styles.barbershopCard}>
+            <Text style={styles.name}>{item.name}</Text>
+            <Text style={styles.city}>{item.city}</Text>
+            {item.description && <Text style={styles.description}>{item.description}</Text>}
+            <Button
+              title="View & Book"
+              onPress={() => navigation.navigate('BarbershopDetails', { barbershopId: item.id })}
+              style={styles.bookBtn}
+            />
+          </Card>
+        )}
+        ListEmptyComponent={<Empty title="No barbershops" message="No barbershops available yet." />}
       />
     </View>
   );
@@ -113,9 +88,9 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   topRow: {
-    alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 14,
   },
   title: {
@@ -128,26 +103,36 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 2,
   },
-  searchRow: {
-    alignItems: 'center',
+  actionsRow: {
     flexDirection: 'row',
-    marginBottom: 10,
+    gap: 10,
+    marginBottom: 16,
   },
-  input: {
-    backgroundColor: '#ffffff',
-    borderColor: '#cbd5e1',
-    borderRadius: 10,
-    borderWidth: 1,
+  actionBtn: {
     flex: 1,
-    marginRight: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
   },
   listContent: {
     paddingBottom: 20,
   },
-  error: {
-    color: '#b91c1c',
-    marginBottom: 10,
+  barbershopCard: {
+    marginBottom: 12,
+  },
+  name: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#0f172a',
+  },
+  city: {
+    fontSize: 14,
+    color: '#64748b',
+    marginTop: 2,
+  },
+  description: {
+    fontSize: 13,
+    color: '#475569',
+    marginTop: 6,
+  },
+  bookBtn: {
+    marginTop: 10,
   },
 });
